@@ -1,0 +1,452 @@
+---
+title: "Analyzing Deep Learning Image Classification of High-Performance Liquid Chromatography Chromatograms with Metabolomics"
+author: "Patchipalu, Bhagyalakshmi | Ramontal, Philemon L. | Franke, Max"
+output: html_notebook
+---
+Course: CIS-626 BIG DATA ANALYTCS APPLICATION
+Term: SPRING/T1
+
+Last modified date: 02/2020
+
+# HPLC  {.tabset .tabset-fade .tabset-pills}
+## Workspace preparation
+### Approach
+***
+In this section the work space will be prepared. This means that first the global environment will be cleaned, and all required packages will be loaded. The data is hosted in a database in the aws Cloud and is loaded into R via a SQL connection. The data is transformed into R accordingly (ELT).
+
+***
+### Clean Workspace
+```{r}
+rm(list = ls())
+```
+
+### Install libraries
+```{r}
+#install.packages("")
+```
+
+### Load Packages
+```{r}
+library(tidyverse)
+library(RMySQL)
+library(dplyr)
+```
+### Establish Connection
+```{r}
+#mySQLConnection <- dbConnect(MySQL(),
+#                             user = "application",
+#                             password = "application",
+#                             dbname = "application",
+#                             host = "application.ceumh3rgx59p.us-east-1.rds.amazonaws.com",
+#                             port = 3306)
+```
+### Query Data
+```{r}
+# Send the query
+#results <- dbSendQuery(mySQLConnection, "SELECT * FROM results")
+
+# fetch() converts the query results (stored on the server) to a local data frame
+#results <- fetch(results, n = -1)
+results <- read.csv("~/Desktop/05_Big Data Analytics/04_Classes/03 SP:Term1/CIS-626 BIG DATA ANALYTCS APPLICATION/MSSHPLC_forked/MSHPLC/Results.csv")
+```
+### Transform data
+```{r}
+results$acc <- as.numeric(results$acc)
+results$loss <- as.numeric(results$loss)
+results$val_acc <- as.numeric(results$val_acc)
+results$val_loss <- as.numeric(results$val_loss)
+```
+
+### Head of dataset
+```{r}
+head(results)
+```
+
+## Data Understanding (EDA)
+### Approach
+***
+In this section the data are examined in more detail (exploratory data analysis). The focus is on the performance measurement indicators. This will be compared with the number of Layers, permutations and trials per Layer / Permutation combination.
+
+***
+
+### Values
+```{r}
+Values <- subset(results, select = c(Trials, Permutation.Layer.1, acc, loss, val_acc, val_loss))
+Values$Layer <- as.integer(rep(c(rep(1,70),rep(2,70),rep(4,70),rep(8,70),rep(16,70),rep(32,70),rep(64,70))),1)
+Values <- Values[,c(1,7,2,3,4,5,6)]
+colnames(Values)[which(names(Values) == "Permutation.Layer.1")] <- "Permutations"
+Values
+```
+
+### Mean performance measurement per trial and layer-permutation combination
+
+***
+
+#### Mean and sd acc
+```{r}
+# Define trials steps
+trials <- data.frame(Trials = c(1, seq(from = 11, to = nrow(results), by = 10)))
+# mean Results
+meanResults <- data.frame(Layers = as.integer(c(rep(1,7),rep(2,7),rep(4,7),rep(8,7),rep(16,7),rep(32,7),rep(64,7))),
+                          Permutation = as.integer(c(rep(c(1,2,4,8,16,32,64),7))))
+meanAccResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(meanAccResult) <- "meanAcc"
+sdAccResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(sdAccResult) <- "sdAcc"
+
+for (i in trials[,1]) {
+  meanAcc <- mean(Values[i:(i+9), 4])
+  meanAccResult <- rbind(meanAccResult, meanAcc)
+  sdAcc <- sd(Values[i:(i+9), 4])
+  sdAccResult <- rbind(sdAccResult, sdAcc)
+}
+
+meanSdResults1 <- cbind(meanResults, data.frame(meanAcc = meanAccResult), data.frame(sdAcc = sdAccResult))
+colnames(meanSdResults1) <- c("Layers", "Permutation", "MeanAcc", "SdAcc")
+
+# print the result
+print(meanSdResults1)
+```
+#### Mean and sd loss
+```{r}
+# Define trials steps
+trials <- data.frame(Trials = c(1, seq(from = 11, to = nrow(results), by = 10)))
+# mean Results
+meanResults <- data.frame(Layers = as.integer(c(rep(1,7),rep(2,7),rep(4,7),rep(8,7),rep(16,7),rep(32,7),rep(64,7))),
+                          Permutation = as.integer(c(rep(c(1,2,4,8,16,32,64),7))))
+meanlossResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(meanlossResult) <- "meanloss"
+sdlossResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(sdlossResult) <- "sdloss"
+
+for (i in trials[,1]) {
+  meanloss <- mean(Values[i:(i+9), 5])
+  meanlossResult <- rbind(meanlossResult, meanloss)
+  sdloss <- sd(Values[i:(i+9), 5])
+  sdlossResult <- rbind(sdlossResult, sdloss)
+}
+
+meanSdResults <- cbind(meanResults, data.frame(meanloss = meanlossResult), data.frame(sdloss = sdlossResult))
+colnames(meanSdResults) <- c("Layers", "Permutation", "Meanloss", "Sdloss")
+
+# print the result
+print(meanSdResults)
+```
+#### Mean and sd val_acc
+```{r}
+# Define trials steps
+trials <- data.frame(Trials = c(1, seq(from = 11, to = nrow(results), by = 10)))
+# mean Results
+meanResults <- data.frame(Layers = as.integer(c(rep(1,7),rep(2,7),rep(4,7),rep(8,7),rep(16,7),rep(32,7),rep(64,7))),
+                          Permutation = as.integer(c(rep(c(1,2,4,8,16,32,64),7))))
+meanval_accResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(meanval_accResult) <- "meanval_acc"
+sdval_accResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(sdval_accResult) <- "sdval_acc"
+
+for (i in trials[,1]) {
+  meanval_acc <- mean(Values[i:(i+9), 6])
+  meanval_accResult <- rbind(meanval_accResult, meanval_acc)
+  sdval_acc <- sd(Values[i:(i+9), 6])
+  sdval_accResult <- rbind(sdval_accResult, sdval_acc)
+}
+
+meanSdResults <- cbind(meanResults, data.frame(meanval_acc = meanval_accResult), data.frame(sdval_acc = sdval_accResult))
+colnames(meanSdResults) <- c("Layers", "Permutation", "Meanval_acc", "Sdval_acc")
+
+# print the result
+print(meanSdResults)
+```
+#### Mean and sd val_loss
+```{r}
+# Define trials steps
+trials <- data.frame(Trials = c(1, seq(from = 11, to = nrow(results), by = 10)))
+# mean Results
+meanResults <- data.frame(Layers = as.integer(c(rep(1,7),rep(2,7),rep(4,7),rep(8,7),rep(16,7),rep(32,7),rep(64,7))),
+                          Permutation = as.integer(c(rep(c(1,2,4,8,16,32,64),7))))
+meanval_lossResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(meanval_lossResult) <- "meanval_loss"
+sdval_lossResult <- data.frame(matrix(nrow = 0, ncol = 1))
+colnames(sdval_lossResult) <- "sdval_loss"
+
+for (i in trials[,1]) {
+  meanval_loss <- mean(Values[i:(i+9), 7])
+  meanval_lossResult <- rbind(meanval_lossResult, meanval_loss)
+  sdval_loss <- sd(Values[i:(i+9), 7])
+  sdval_lossResult <- rbind(sdval_lossResult, sdval_loss)
+}
+
+meanSdResults <- cbind(meanResults, data.frame(meanval_loss = meanval_lossResult), data.frame(sdval_loss = sdval_lossResult))
+colnames(meanSdResults) <- c("Layers", "Permutation", "Meanval_loss", "Sdval_loss")
+
+# print the result
+print(meanSdResults)
+```
+
+### Mean, SD and var per Layer
+```{r}
+MeanSDVar_Layer <- Values %>%
+                  select(Layer, acc) %>%
+                  group_by(Layer) %>% 
+                  summarize(Mean = mean(acc), SD = sd(acc), var(acc))
+print(MeanSDVar_Layer)
+
+```
+### Mean, SD and var per Layer and Permutation
+```{r}
+MeanSDVar_Layer_Per <- Values %>%
+                      select(Layer, Permutations, acc) %>%
+                      group_by(Layer, Permutations) %>% 
+                      summarize(Mean = mean(acc), SD = sd(acc), var(acc))
+print(MeanSDVar_Layer_Per)
+write.csv(MeanSDVar_Layer_Per, "Layer_Topology.csv")
+
+```
+### Load epochs
+```{r}
+epochs <- read_csv("~/Desktop/05_Big Data Analytics/04_Classes/03 SP:Term1/CIS-626 BIG DATA ANALYTCS APPLICATION/MSSHPLC_forked/MSHPLC/05_Results/epochs.csv")
+```
+### Analyze epochs
+```{r}
+# Transform data
+epochs$Layer <- as.numeric(epochs$Layer)
+epochs$Neuron <- as.numeric(epochs$Neuron)
+epochs$Epochs <- as.numeric(epochs$Epochs)
+# Head of data
+head(epochs)
+epochs
+```
+
+
+### Visualization
+
+***
+```{r}
+layerNeurons <- data.frame(Layer = c(1,2,4,8,16,32,64),
+                           Neuron = c(16,64,32,2,64,2,1),
+                           Name = c("Layer01 Neuron16",
+                                    "Layer02 Neuron64",
+                                    "Layer04 Neuron32",
+                                    "Layer08 Neuron2",
+                                    "Layer16 Neuron64",
+                                    "Layer32 Neuron2",
+                                    "Layer64 Neuron1"))
+layerNeurons$Name <- as.character(layerNeurons$Name)
+
+for (i in 1:nrow(layerNeurons)) {
+  Layer_Neuron_epoch <- subset(epochs, Layer == layerNeurons[i,1] & Neuron == layerNeurons[i,2])
+  resultLN <- Layer_Neuron_epoch %>%
+              group_by(Epochs) %>%
+              summarise(VarAcc = var(Accuracy))
+  resultLN$`Top layer neuron combination` <- as.character(layerNeurons[i,3])
+  assign(as.character(layerNeurons[i,3]), resultLN, envir = .GlobalEnv)
+}
+
+plot_df <- rbind(`Layer01 Neuron16`, `Layer02 Neuron64`, `Layer04 Neuron32`, `Layer08 Neuron2`, `Layer16 Neuron64`, `Layer32 Neuron2`, `Layer64 Neuron1`)
+ggplot(plot_df, aes(Epochs, VarAcc, color = `Top layer neuron combination`), size = 1.5) + geom_line() + 
+  labs(title = "Comparison of top layer neuron combination for each epoch",
+x = "epochs",
+y = "Mean Variance")
+
+```
+
+### Best combination of each layer with neuron
+```{r}
+layerNeurons <- data.frame(Layer = c(1,2,4,8,16,32,64),
+                           Neuron = c(16,64,32,2,64,2,1),
+                           Name = c("Layer01 Neuron16",
+                                    "Layer02 Neuron64",
+                                    "Layer04 Neuron32",
+                                    "Layer08 Neuron2",
+                                    "Layer16 Neuron64",
+                                    "Layer32 Neuron2",
+                                    "Layer64 Neuron1"))
+layerNeurons$Name <- as.character(layerNeurons$Name)
+
+for (i in 1:nrow(layerNeurons)) {
+  Layer_Neuron_epoch <- subset(epochs, Layer == layerNeurons[i,1] & Neuron == layerNeurons[i,2])
+  resultLN <- Layer_Neuron_epoch %>%
+              group_by(Epochs) %>%
+              summarise(MeanAcc = mean(Accuracy))
+  resultLN$`Top layer neuron combination` <- as.character(layerNeurons[i,3])
+  assign(as.character(layerNeurons[i,3]), resultLN, envir = .GlobalEnv)
+}
+
+plot_df <- rbind(`Layer01 Neuron16`, `Layer02 Neuron64`, `Layer04 Neuron32`, `Layer08 Neuron2`, `Layer16 Neuron64`, `Layer32 Neuron2`, `Layer64 Neuron1`)
+ggplot(plot_df, aes(Epochs, MeanAcc, color = `Top layer neuron combination`), size = 1.5) + geom_line() + 
+  labs(title = "Comparison of top layer neuron combination for each epoch",
+x = "epochs",
+y = "Mean Variance")
+
+
+```
+
+#### Boxplot of Layers vs. accuracy
+```{r}
+Values_Boxplot <- Values
+Values_Boxplot$Permutations <- as.factor(Values_Boxplot$Permutations)
+colnames(Values_Boxplot)[which(names(Values_Boxplot) == "Permutations")] <- "Topology"
+plot1 <- ggplot(data = Values_Boxplot, mapping = aes(x = as.factor(Layer), y = acc)) +
+            geom_point(aes(color = Topology), alpha = 0.9, position = "jitter") +
+            geom_boxplot(outlier.size=2, alpha=0.1) +
+            labs(title = "Distribution of average Accuracies of Layers sorted by Topologies",
+                 x = "Layers",
+                 y = "Mean Accuracy")
+print(plot1)
+```
+#### Val acc vs acc
+```{r}
+ValAcc_acc <- Values %>%select(Layer, acc, val_acc) %>%
+                  group_by(Layer) %>% 
+                  summarize(MeanAcc = mean(acc), MeanValAcc = mean(val_acc))
+# Plot
+ggplot() +
+geom_point(data = ValAcc_acc, aes(x = as.factor(Layer), y = MeanAcc, color = "red"), size = 5) +
+geom_point(data = ValAcc_acc, aes(x = as.factor(Layer), y = MeanValAcc, color = "blue"), size = 5) +
+scale_color_discrete(name = "Accuracy comparison", labels = c("validation accuracy", "accuracy")) +
+labs(title = "Comparison of accuarcy and validation accuracy",
+x = "Layers",
+y = "Accuracy")
+
+```
+
+```{r}
+cyl_table <- table(meanSdResults1$Layers)
+cyl_levels <- names(cyl_table)[order(cyl_table)]
+meanSdResults1$cyl2 <- factor(meanSdResults1$Layers, levels = c("1","2","4","8", "16", "32","64"))
+ 
+meanSdResults1$Layers <- as.factor(meanSdResults1$Layers)
+meanSdResults1$Permutation <- as.factor(meanSdResults1$Permutation)
+colnames(meanSdResults1)[which(names(meanSdResults1) == "Permutation")] <- "Topology"
+
+ggplot(data=meanSdResults1,aes(x=cyl2, y= MeanAcc,fill= Topology))+geom_bar(stat= "identity",position = "dodge")+labs(x= "Layers", y= "Mean Accuracy",title = "Average Accuracies of Layers sorted by the Topologies")
+```
+
+
+### Summary
+
+***
+
+The first impression is that the number of Layers has an impact on the accuracy. This has to checked statistically.
+
+***
+
+## Hypothesis Testing
+### Approach
+***
+
+In this section different hypotheses regarding Layers and permutations are examined. First it will be proved if there is a sig difference between the layers and then if there is a sig difference in one layer and between the permutations.
+
+***
+
+### ANOVA between the Layers H0: mu1=mu2=...=mui [assuming normality]
+```{r}
+Values$Layer <- as.factor(Values$Layer)
+aov <- aov(formula = acc ~ Layer, data = Values)
+summary_aov <- summary(aov)
+print(summary_aov)
+```
+### Tukey Test in order to specifiy
+```{r}
+TukeyHSD(aov)
+```
+### Summary
+***
+
+ANOVA and Tukey show that there is sig. difference between the layers. Tukey shows in detail between with layers is a sig. difference, e.g. between a model with one layer and a model with 2 layers there is no sig. difference. But between a model with one layer and a model with four layers, there is sig difference.
+
+***
+
+### ANOVA in the Layers H0: mu1=mu2=...=mui [assuming normality]
+#### First Layer
+```{r}
+Values$Permutations <- as.factor(Values$Permutations)
+# First Layer
+firstL <- subset(Values, Layer == 1)
+aovFirstL <- aov(acc ~ Permutations, data = firstL)
+summary(aovFirstL)
+```
+#### Second Layer
+```{r}
+# Second Layer
+SecondL <- subset(Values, Layer == 2)
+aovSecondL <- aov(acc ~ Permutations, data = SecondL)
+summary(aovSecondL)
+```
+#### Fourth Layer
+```{r}
+# Fourth Layer
+FourthL <- subset(Values, Layer == 4)
+aovFourthL <- aov(acc ~ Permutations, data = FourthL)
+summary(aovFourthL)
+```
+##### Tukey Test
+```{r}
+TukeyHSD(aovFourthL)
+```
+#### Eigth Layer
+```{r}
+# Eigth Layer
+EigthL <- subset(Values, Layer == 8)
+aovEigthL <- aov(acc ~ Permutations, data = EigthL)
+summary(aovEigthL)
+```
+##### Tukey Test
+```{r}
+TukeyHSD(aovEigthL)
+```
+#### Sixteen Layer
+```{r}
+# Sixteen Layer
+SixteenL <- subset(Values, Layer == 16)
+aovSixteenL <- aov(acc ~ Permutations, data = SixteenL)
+summary(aovSixteenL)
+```
+##### Tukey Test
+```{r}
+TukeyHSD(aovSixteenL)
+```
+#### Thirtytwo Layer
+```{r}
+# Thirtytwo Layer
+ThirtytwoL <- subset(Values, Layer == 32)
+aovThirtytwoL <- aov(acc ~ Permutations, data = ThirtytwoL)
+summary(aovThirtytwoL)
+```
+#### Sixtyfour Layer
+```{r}
+# Sixtyfour Layer
+SixtyfourL <- subset(Values, Layer == 64)
+aovSixtyfourL <- aov(acc ~ Permutations, data = SixtyfourL)
+summary(aovSixtyfourL)
+```
+
+### Summary
+
+***
+
+The relation between the permutations in one layer are examined in the statistical checks above. 
+A model with 1,2,8,32 or 64 layers has no sig. difference between the permutations concerning the accuracy values.
+A model with 4 layers has a sig. difference between 2-8, 8-32, 16-32 permutations.
+A model with 16 layers has a slightly sig. difference between 32-64 permutations.
+
+***
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
